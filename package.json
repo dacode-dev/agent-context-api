@@ -1,8 +1,13 @@
 {
   "name": "agent-context-api",
   "version": "0.1.0",
-  "private": true,
   "description": "A deterministic x402 API for LLM context budgets and secret redaction.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dacode-dev/agent-context-api.git"
+  },
+  "homepage": "https://github.com/dacode-dev/agent-context-api",
+  "keywords": ["mcp", "llm", "context", "tokens", "secret-redaction", "x402", "agents"],
   "type": "module",
   "bin": {
     "agent-context-mcp": "mcp-server.js"
@@ -12,6 +17,7 @@
     "start:mcp": "node mcp-server.js",
     "test": "node --test"
   },
+  "files": ["LICENSE", "README.md", "analysis.js", "llms-install.md", "mcp-server.js", "server.js"],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@x402/core": "^2.21.0",
