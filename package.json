@@ -1,6 +1,6 @@
 {
   "name": "agent-context-api",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A deterministic x402 API for LLM context budgets and secret redaction.",
   "repository": {
     "type": "git",
@@ -17,7 +17,7 @@
     "start:mcp": "node mcp-server.js",
     "test": "node --test"
   },
-  "files": ["LICENSE", "README.md", "analysis.js", "llms-install.md", "mcp-server.js", "server.js"],
+  "files": ["LICENSE", "README.md", "analysis.js", "bounty-radar.js", "llms-install.md", "mcp-server.js", "server.js"],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@x402/core": "^2.21.0",

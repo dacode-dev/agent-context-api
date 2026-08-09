@@ -4,6 +4,7 @@ import { HTTPFacilitatorClient, x402ResourceServer } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { declareDiscoveryExtension, bazaarResourceServerExtension } from "@x402/extensions/bazaar";
 import { countTokens, redactSecrets, budgetForModel } from "./analysis.js";
+import { fetchRadar } from "./bounty-radar.js";
 
 export const MAX_INPUT_CHARS = 200_000;
 export const PRICE = "$0.005";
@@ -41,11 +42,11 @@ export function createApp({ beforeMiddleware = null } = {}) {
   app.use(express.json({ limit: "1mb" }));
   if (beforeMiddleware) app.use(beforeMiddleware);
 
-  app.get("/health", (_req, res) => res.json({ ok: true, service: "agent-context-api", version: "0.1.0" }));
+  app.get("/health", (_req, res) => res.json({ ok: true, service: "agent-context-api", version: "0.2.0" }));
   app.get("/", (_req, res) => res.json({
     service: "LLM Context Preflight",
     description: "Count tokens, apply a model-aware budget, and redact likely secrets before an agent sends context.",
-    endpoint: "POST /v1/context-preflight",
+    endpoints: ["POST /v1/context-preflight", "POST /v1/bounty-radar"],
     price: PRICE,
   }));
 
@@ -55,6 +56,24 @@ export function createApp({ beforeMiddleware = null } = {}) {
       res.json(analyzeContext({ text, model, tokenBudget, redact }));
     } catch (error) {
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/v1/bounty-radar", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const minRewardUsd = Number(body.min_reward_usd || 0);
+      if (!Number.isFinite(minRewardUsd) || minRewardUsd < 0) {
+        return res.status(400).json({ error: "min_reward_usd must be a non-negative number" });
+      }
+      res.json(await fetchRadar({
+        includeUnverified: body.include_unverified === true,
+        minRewardUsd,
+        limit: body.limit,
+        source: typeof body.source === "string" ? body.source : null,
+      }));
+    } catch (error) {
+      res.status(502).json({ error: `bounty sources unavailable: ${error.message}` });
     }
   });
   return app;
@@ -82,6 +101,15 @@ export function createPaidApp() {
     fits_budget: true,
     recommendation: "Context is within the requested budget.",
   };
+  const radarInputSchema = {
+    type: "object",
+    properties: {
+      include_unverified: { type: "boolean", default: false, description: "Include listings without canonical escrow evidence, clearly labeled as unverified." },
+      min_reward_usd: { type: "number", minimum: 0, default: 0, description: "Minimum reward filter." },
+      limit: { type: "integer", minimum: 1, maximum: 100, default: 20, description: "Maximum number of results." },
+      source: { type: ["string", "null"], description: "Optional source filter, such as agent-bounties or clawhunter." },
+    },
+  };
   const routes = {
     "POST /v1/context-preflight": {
       accepts: { scheme: "exact", price: PRICE, network: "eip155:8453", payTo: PAY_TO, maxTimeoutSeconds: 60 },
@@ -89,6 +117,19 @@ export function createPaidApp() {
       mimeType: "application/json",
       extensions: {
         ...declareDiscoveryExtension({ input: { text: "const key = 'sk-live-example';", model: "claude-sonnet", token_budget: 1000, redact: true }, inputSchema, bodyType: "json", output: { example: outputExample } }),
+      },
+    },
+    "POST /v1/bounty-radar": {
+      accepts: { scheme: "exact", price: "$0.01", network: "eip155:8453", payTo: PAY_TO, maxTimeoutSeconds: 60 },
+      description: "Return a fresh, normalized agent-work feed with explicit escrow evidence, claim bonds, deadlines, and source-health labels. Only canonical escrowed items are called funded.",
+      mimeType: "application/json",
+      extensions: {
+        ...declareDiscoveryExtension({
+          input: { include_unverified: false, min_reward_usd: 0, limit: 20, source: null },
+          inputSchema: radarInputSchema,
+          bodyType: "json",
+          output: { example: { generated_at: "2026-08-09T00:00:00.000Z", summary: { returned: 1, verified_funded: 1, unverified_listings: 0 }, items: [{ title: "Example funded task", payment_committed: true, payment_evidence: "canonical_escrowed" }] } },
+        }),
       },
     },
   };

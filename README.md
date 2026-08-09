@@ -2,6 +2,8 @@
 
 A small paid API for coding agents that need a deterministic context preflight before sending repository text to an LLM. It counts GPT-family tokens, applies an optional model-aware budget, and redacts likely credentials.
 
+It also exposes a managed `bounty-radar` feed. The radar normalizes live agent-work listings and preserves the difference between a canonical escrow signal and an ordinary venue listing. This is intentionally a managed-data experiment: the source code is public, but the paid value is fresh aggregation, source health, stale-listing filtering, and explicit funding evidence.
+
 ## Local development
 
 ```bash
@@ -22,6 +24,16 @@ curl -X POST http://localhost:8787/v1/context-preflight \
 
 The default price is `$0.005` per request. Set `PAY_TO` to change the public payout address and `X402_FACILITATOR` to select a compatible facilitator. Do not put private keys or facilitator credentials in this repository; the service does not need a signing key to receive payments.
 
+## Managed bounty radar
+
+`POST /v1/bounty-radar` costs `$0.01` through x402. Send filters such as:
+
+```json
+{"include_unverified":false,"min_reward_usd":0,"limit":20}
+```
+
+The response includes source health, deadlines, claim bonds, external-spend requirements, and a `payment_evidence` field. Only listings explicitly marked canonical and escrowed are labeled funded; other listings remain visible only when requested and are labeled unverified.
+
 ## MCP integration
 
 The repository also includes a local stdio MCP server for Cline and other MCP clients:
@@ -34,7 +46,8 @@ The `preflight_context` tool provides a free local tier up to 12,000 characters.
 
 ## Design notes
 
-- `server.js` contains the Express app, x402 payment middleware, discovery metadata, and analysis logic.
-- `test/server.test.js` covers redaction, budgets, and the health route.
+- `server.js` contains the Express app, x402 payment middleware, discovery metadata, and route wiring.
+- `analysis.js` contains deterministic context analysis; `bounty-radar.js` contains source normalization and evidence policy.
+- `test/server.test.js` covers redaction, budgets, the health route, and funded/unfunded labeling.
 - The API intentionally does not send submitted text to a third party; processing is local.
 - This is an experiment. Revenue must be verified from settlement records, not inferred from 402 responses, requests, or directory listings.
