@@ -3,7 +3,7 @@ import { paymentMiddleware } from "@x402/express";
 import { HTTPFacilitatorClient, x402ResourceServer } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { declareDiscoveryExtension, bazaarResourceServerExtension } from "@x402/extensions/bazaar";
-import { countTokens, redactSecrets, budgetForModel } from "../ctx-budget/src/lib.js";
+import { countTokens, redactSecrets, budgetForModel } from "./analysis.js";
 
 export const MAX_INPUT_CHARS = 200_000;
 export const PRICE = "$0.005";

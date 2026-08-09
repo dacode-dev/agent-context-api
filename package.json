@@ -19,6 +19,7 @@
     "@x402/express": "^2.21.0",
     "@x402/extensions": "^2.21.0",
     "express": "^5.1.0",
+    "gpt-tokenizer": "^3.4.0",
     "zod": "^4.4.3"
   }
 }
