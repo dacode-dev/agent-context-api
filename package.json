@@ -4,15 +4,21 @@
   "private": true,
   "description": "A deterministic x402 API for LLM context budgets and secret redaction.",
   "type": "module",
+  "bin": {
+    "agent-context-mcp": "mcp-server.js"
+  },
   "scripts": {
     "start": "node server.js",
+    "start:mcp": "node mcp-server.js",
     "test": "node --test"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@x402/core": "^2.21.0",
     "@x402/evm": "^2.21.0",
     "@x402/express": "^2.21.0",
     "@x402/extensions": "^2.21.0",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "zod": "^4.4.3"
   }
 }

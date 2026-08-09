@@ -22,6 +22,16 @@ curl -X POST http://localhost:8787/v1/context-preflight \
 
 The default price is `$0.005` per request. Set `PAY_TO` to change the public payout address and `X402_FACILITATOR` to select a compatible facilitator. Do not put private keys or facilitator credentials in this repository; the service does not need a signing key to receive payments.
 
+## MCP integration
+
+The repository also includes a local stdio MCP server for Cline and other MCP clients:
+
+```bash
+npm run start:mcp
+```
+
+The `preflight_context` tool provides a free local tier up to 12,000 characters. Larger inputs return the paid HTTP endpoint and its x402 price. Set `PAID_ENDPOINT` to the currently deployed endpoint when launching the MCP server. See [`llms-install.md`](./llms-install.md) for a copy-paste client configuration.
+
 ## Design notes
 
 - `server.js` contains the Express app, x402 payment middleware, discovery metadata, and analysis logic.
