@@ -2,7 +2,7 @@
 
 A small paid API for coding agents that need a deterministic context preflight before sending repository text to an LLM. It counts GPT-family tokens, applies an optional model-aware budget, and redacts likely credentials.
 
-It also exposes a managed `bounty-radar` feed. The radar normalizes live agent-work listings and preserves the difference between a canonical escrow signal and an ordinary venue listing. This is intentionally a managed-data experiment: the source code is public, but the paid value is fresh aggregation, source health, stale-listing filtering, and explicit funding evidence.
+It also exposes managed data experiments. `bounty-radar` normalizes live agent-work listings and preserves the difference between a canonical escrow signal and an ordinary venue listing. `payanagent-health` produces a fresh liveness snapshot of the ranked PayanAgent catalog. The source code is public, but the paid value is operated aggregation, source health, bounded probing, and timestamped results that a buyer does not have to run.
 
 ## Local development
 
@@ -34,6 +34,10 @@ The default price is `$0.005` per request. Set `PAY_TO` to change the public pay
 
 The response includes source health, deadlines, claim bonds, external-spend requirements, and a `payment_evidence` field. Only listings explicitly marked canonical and escrowed are labeled funded; other listings remain visible only when requested and are labeled unverified.
 
+## PayanAgent catalog health
+
+`POST /v1/payanagent-health` costs `$0.01` through x402. It accepts an optional `limit` from 1 to 25 and checks the ranked public catalog using only read-only `HEAD` requests (falling back to `OPTIONS` when required). HTTP 402 means that a live payment gate responded; the service never sends payment headers or calls paid routes. The response contains per-offer status, HTTP code, latency, summary counts, and `generated_at`.
+
 ## MCP integration
 
 The repository also includes a local stdio MCP server for Cline and other MCP clients:
@@ -48,6 +52,7 @@ The `preflight_context` tool provides a free local tier up to 12,000 characters.
 
 - `server.js` contains the Express app, x402 payment middleware, discovery metadata, and route wiring.
 - `analysis.js` contains deterministic context analysis; `bounty-radar.js` contains source normalization and evidence policy.
-- `test/server.test.js` covers redaction, budgets, the health route, and funded/unfunded labeling.
+- `payanagent-health.js` contains the bounded, read-only catalog collector and probe logic.
+- `test/server.test.js` covers redaction, budgets, the health route, and funded/unfunded labeling; `test/payanagent-health.test.js` covers health classification and the no-payment probe contract.
 - The API intentionally does not send submitted text to a third party; processing is local.
 - This is an experiment. Revenue must be verified from settlement records, not inferred from 402 responses, requests, or directory listings.

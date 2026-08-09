@@ -5,9 +5,12 @@ import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { declareDiscoveryExtension, bazaarResourceServerExtension } from "@x402/extensions/bazaar";
 import { countTokens, redactSecrets, budgetForModel } from "./analysis.js";
 import { fetchRadar } from "./bounty-radar.js";
+import { generateHealthReport } from "./payanagent-health.js";
 
 export const MAX_INPUT_CHARS = 200_000;
 export const PRICE = "$0.005";
+export const RADAR_PRICE = "$0.01";
+export const HEALTH_PRICE = "$0.01";
 export const PAY_TO = process.env.PAY_TO || "0xc4e8021CdFf1a11946Ed16bd264f77D6B3C0C0e9";
 
 export function analyzeContext({ text, model = null, tokenBudget = null, redact = true }) {
@@ -42,12 +45,12 @@ export function createApp({ beforeMiddleware = null } = {}) {
   app.use(express.json({ limit: "1mb" }));
   if (beforeMiddleware) app.use(beforeMiddleware);
 
-  app.get("/health", (_req, res) => res.json({ ok: true, service: "agent-context-api", version: "0.2.0" }));
+  app.get("/health", (_req, res) => res.json({ ok: true, service: "agent-context-api", version: "0.3.0" }));
   app.get("/", (_req, res) => res.json({
     service: "LLM Context Preflight",
-    description: "Count tokens, apply a model-aware budget, and redact likely secrets before an agent sends context.",
-    endpoints: ["POST /v1/context-preflight", "POST /v1/bounty-radar"],
-    prices: { "POST /v1/context-preflight": PRICE, "POST /v1/bounty-radar": "$0.01" },
+    description: "Deterministic context analysis plus operated, fresh agent-market data.",
+    endpoints: ["POST /v1/context-preflight", "POST /v1/bounty-radar", "POST /v1/payanagent-health"],
+    prices: { "POST /v1/context-preflight": PRICE, "POST /v1/bounty-radar": RADAR_PRICE, "POST /v1/payanagent-health": HEALTH_PRICE },
   }));
 
   app.post("/v1/context-preflight", (req, res) => {
@@ -74,6 +77,15 @@ export function createApp({ beforeMiddleware = null } = {}) {
       }));
     } catch (error) {
       res.status(502).json({ error: `bounty sources unavailable: ${error.message}` });
+    }
+  });
+
+  app.post("/v1/payanagent-health", async (req, res) => {
+    try {
+      const body = req.body || {};
+      res.json(await generateHealthReport({ limit: body.limit }));
+    } catch (error) {
+      res.status(502).json({ error: `PayanAgent catalog unavailable: ${error.message}` });
     }
   });
   return app;
@@ -110,6 +122,12 @@ export function createPaidApp() {
       source: { type: ["string", "null"], description: "Optional source filter, such as agent-bounties or clawhunter." },
     },
   };
+  const healthInputSchema = {
+    type: "object",
+    properties: {
+      limit: { type: "integer", minimum: 1, maximum: 25, default: 25, description: "Number of ranked public offers to check; capped at 25 for bounded latency." },
+    },
+  };
   const routes = {
     "POST /v1/context-preflight": {
       accepts: { scheme: "exact", price: PRICE, network: "eip155:8453", payTo: PAY_TO, maxTimeoutSeconds: 60 },
@@ -120,7 +138,7 @@ export function createPaidApp() {
       },
     },
     "POST /v1/bounty-radar": {
-      accepts: { scheme: "exact", price: "$0.01", network: "eip155:8453", payTo: PAY_TO, maxTimeoutSeconds: 60 },
+      accepts: { scheme: "exact", price: RADAR_PRICE, network: "eip155:8453", payTo: PAY_TO, maxTimeoutSeconds: 60 },
       description: "Return a fresh, normalized agent-work feed with explicit escrow evidence, claim bonds, deadlines, and source-health labels. Only canonical escrowed items are called funded.",
       mimeType: "application/json",
       extensions: {
@@ -129,6 +147,19 @@ export function createPaidApp() {
           inputSchema: radarInputSchema,
           bodyType: "json",
           output: { example: { generated_at: "2026-08-09T00:00:00.000Z", summary: { returned: 1, verified_funded: 1, unverified_listings: 0 }, items: [{ title: "Example funded task", payment_committed: true, payment_evidence: "canonical_escrowed" }] } },
+        }),
+      },
+    },
+    "POST /v1/payanagent-health": {
+      accepts: { scheme: "exact", price: HEALTH_PRICE, network: "eip155:8453", payTo: PAY_TO, maxTimeoutSeconds: 60 },
+      description: "Return a fresh read-only health snapshot of the ranked PayanAgent catalog. The operation probes public routes with HEAD/OPTIONS only and never makes paid calls.",
+      mimeType: "application/json",
+      extensions: {
+        ...declareDiscoveryExtension({
+          input: { limit: 25 },
+          inputSchema: healthInputSchema,
+          bodyType: "json",
+          output: { example: { generated_at: "2026-08-09T00:00:00.000Z", checked: 2, paid_calls_made: 0, summary: { alive: 1, four_xx: 0, five_xx: 1, timeout: 0, dead: 0 }, rows: [{ offer_id: "offer_example", title: "Example service", status: "alive", http_code: 402, latency_ms: 120 }] } },
         }),
       },
     },
