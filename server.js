@@ -47,7 +47,7 @@ export function createApp({ beforeMiddleware = null } = {}) {
     service: "LLM Context Preflight",
     description: "Count tokens, apply a model-aware budget, and redact likely secrets before an agent sends context.",
     endpoints: ["POST /v1/context-preflight", "POST /v1/bounty-radar"],
-    price: PRICE,
+    prices: { "POST /v1/context-preflight": PRICE, "POST /v1/bounty-radar": "$0.01" },
   }));
 
   app.post("/v1/context-preflight", (req, res) => {
