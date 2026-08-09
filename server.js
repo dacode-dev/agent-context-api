@@ -6,11 +6,13 @@ import { declareDiscoveryExtension, bazaarResourceServerExtension } from "@x402/
 import { countTokens, redactSecrets, budgetForModel } from "./analysis.js";
 import { fetchRadar } from "./bounty-radar.js";
 import { generateHealthReport } from "./payanagent-health.js";
+import { generateMarketPulse } from "./market-pulse.js";
 
 export const MAX_INPUT_CHARS = 200_000;
 export const PRICE = "$0.005";
 export const RADAR_PRICE = "$0.01";
 export const HEALTH_PRICE = "$0.01";
+export const MARKET_PULSE_PRICE = "$0.01";
 export const PAY_TO = process.env.PAY_TO || "0xc4e8021CdFf1a11946Ed16bd264f77D6B3C0C0e9";
 
 export function analyzeContext({ text, model = null, tokenBudget = null, redact = true }) {
@@ -45,12 +47,12 @@ export function createApp({ beforeMiddleware = null } = {}) {
   app.use(express.json({ limit: "1mb" }));
   if (beforeMiddleware) app.use(beforeMiddleware);
 
-  app.get("/health", (_req, res) => res.json({ ok: true, service: "agent-context-api", version: "0.3.0" }));
+  app.get("/health", (_req, res) => res.json({ ok: true, service: "agent-context-api", version: "0.4.0" }));
   app.get("/", (_req, res) => res.json({
     service: "LLM Context Preflight",
     description: "Deterministic context analysis plus operated, fresh agent-market data.",
-    endpoints: ["POST /v1/context-preflight", "POST /v1/bounty-radar", "POST /v1/payanagent-health"],
-    prices: { "POST /v1/context-preflight": PRICE, "POST /v1/bounty-radar": RADAR_PRICE, "POST /v1/payanagent-health": HEALTH_PRICE },
+    endpoints: ["POST /v1/context-preflight", "POST /v1/bounty-radar", "POST /v1/payanagent-health", "POST /v1/base-market-pulse"],
+    prices: { "POST /v1/context-preflight": PRICE, "POST /v1/bounty-radar": RADAR_PRICE, "POST /v1/payanagent-health": HEALTH_PRICE, "POST /v1/base-market-pulse": MARKET_PULSE_PRICE },
   }));
 
   app.post("/v1/context-preflight", (req, res) => {
@@ -86,6 +88,14 @@ export function createApp({ beforeMiddleware = null } = {}) {
       res.json(await generateHealthReport({ limit: body.limit }));
     } catch (error) {
       res.status(502).json({ error: `PayanAgent catalog unavailable: ${error.message}` });
+    }
+  });
+
+  app.post("/v1/base-market-pulse", async (_req, res) => {
+    try {
+      res.json(await generateMarketPulse());
+    } catch (error) {
+      res.status(502).json({ error: `market data unavailable: ${error.message}` });
     }
   });
   return app;
@@ -128,6 +138,11 @@ export function createPaidApp() {
       limit: { type: "integer", minimum: 1, maximum: 25, default: 25, description: "Number of ranked public offers to check; capped at 25 for bounded latency." },
     },
   };
+  const marketPulseInputSchema = {
+    type: "object",
+    properties: {},
+    additionalProperties: false,
+  };
   const routes = {
     "POST /v1/context-preflight": {
       accepts: { scheme: "exact", price: PRICE, network: "eip155:8453", payTo: PAY_TO, maxTimeoutSeconds: 60 },
@@ -160,6 +175,19 @@ export function createPaidApp() {
           inputSchema: healthInputSchema,
           bodyType: "json",
           output: { example: { generated_at: "2026-08-09T00:00:00.000Z", checked: 2, paid_calls_made: 0, summary: { alive: 1, four_xx: 0, five_xx: 1, timeout: 0, dead: 0 }, rows: [{ offer_id: "offer_example", title: "Example service", status: "alive", http_code: 402, latency_ms: 120 }] } },
+        }),
+      },
+    },
+    "POST /v1/base-market-pulse": {
+      accepts: { scheme: "exact", price: MARKET_PULSE_PRICE, network: "eip155:8453", payTo: PAY_TO, maxTimeoutSeconds: 60 },
+      description: "Return a fresh informational Base ETH and DEX market snapshot from public Coinbase, DEX Screener, and Base RPC sources. No trade or transaction is executed.",
+      mimeType: "application/json",
+      extensions: {
+        ...declareDiscoveryExtension({
+          input: {},
+          inputSchema: marketPulseInputSchema,
+          bodyType: "json",
+          output: { example: { generated_at: "2026-08-09T00:00:00.000Z", product: "Base ETH and DEX market pulse", summary: { sources_ok: 3, sources_total: 3, eth_usd: 2500, base_block_number: 123, base_gas_price_gwei: 0.01 } } },
         }),
       },
     },
