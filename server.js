@@ -88,7 +88,7 @@ export function createApp({ beforeMiddleware = null } = {}) {
       "bounded latency and a maintained public endpoint",
     ],
     self_hosting_note: "The implementation is public; self-hosting is an option. The paid convenience is consuming an operated result without deploying, monitoring, or repairing the upstream integrations.",
-    endpoints: ["POST /v1/context-preflight", "POST /v1/bounty-radar", "POST /v1/payanagent-health", "GET /v1/base-market-pulse", "POST /v1/base-market-pulse", "POST /v1/agent-work-brief"],
+    endpoints: ["POST /mcp", "POST /v1/context-preflight", "POST /v1/bounty-radar", "POST /v1/payanagent-health", "GET /v1/base-market-pulse", "POST /v1/base-market-pulse", "POST /v1/agent-work-brief"],
     prices: { "POST /v1/context-preflight": PRICE, "POST /v1/bounty-radar": RADAR_PRICE, "POST /v1/payanagent-health": HEALTH_PRICE, "GET /v1/base-market-pulse": MARKET_PULSE_PRICE, "POST /v1/base-market-pulse": MARKET_PULSE_PRICE, "POST /v1/agent-work-brief": WORK_BRIEF_PRICE },
   }));
 
