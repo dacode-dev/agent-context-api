@@ -66,7 +66,7 @@ npm run start:mcp
 
 The `preflight_context` tool provides a free local tier up to 12,000 characters. Larger inputs return the paid HTTP endpoint and its x402 price. Set `PAID_ENDPOINT` to the currently deployed endpoint when launching the MCP server. See [`llms-install.md`](./llms-install.md) for a copy-paste client configuration.
 
-The same server is available as a hosted, stateless Streamable HTTP MCP endpoint at `https://agent-context-api-proxy.agent-context-proxy.workers.dev/mcp` and is described by [`server.json`](./server.json). This hosted route is intended for clients that can discover remote MCP servers; local execution remains available for self-hosting and offline preflight work. [`glama.json`](./glama.json) identifies the GitHub maintainer for directory indexing and ownership.
+The same server is available as a hosted, stateless Streamable HTTP MCP endpoint at `https://agent-context-api-proxy.agent-context-proxy.workers.dev/mcp` and is described by [`server.json`](./server.json). It is published in the [official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.dacode-dev%2Fagent-context-api) for client and downstream-directory discovery. This hosted route is intended for clients that can discover remote MCP servers; local execution remains available for self-hosting and offline preflight work. [`glama.json`](./glama.json) identifies the GitHub maintainer for directory indexing and ownership.
 
 ## Design notes
 
