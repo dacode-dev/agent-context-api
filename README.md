@@ -20,6 +20,8 @@ X402_FACILITATOR=https://facilitator.openx402.ai npm start
 
 The service listens on `http://localhost:8787` by default. `GET /health` is free. `POST /v1/context-preflight` returns an x402 `402 Payment Required` response until the caller supplies a valid Base USDC payment.
 
+For production Base mainnet operation, use a facilitator that advertises `x402Version: 2`, `scheme: exact`, and `network: eip155:8453` at its `/supported` endpoint; the maintained deployment uses `https://facilitator.openx402.ai`. The public `https://x402.org/facilitator` endpoint is suitable for Base Sepolia testing, not this mainnet payout configuration. Always verify current facilitator support before changing deployments.
+
 ## API example
 
 ```bash
