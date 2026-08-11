@@ -17,7 +17,7 @@
     "start:mcp": "node mcp-server.js",
     "test": "node --test"
   },
-  "files": ["LICENSE", "README.md", "analysis.js", "bounty-radar.js", "llms-install.md", "market-pulse.js", "mcp-server.js", "payanagent-health.js", "server.js"],
+  "files": ["LICENSE", "README.md", "analysis.js", "bounty-radar.js", "llms-install.md", "market-pulse.js", "mcp-core.js", "mcp-server.js", "payanagent-health.js", "server.js", "server.json"],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@x402/core": "^2.21.0",

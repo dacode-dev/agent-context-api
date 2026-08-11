@@ -4,6 +4,12 @@ A small paid API for coding agents that need a deterministic context preflight b
 
 It also exposes managed data experiments. `bounty-radar` normalizes live agent-work listings and preserves the difference between a canonical escrow signal and an ordinary venue listing. `payanagent-health` produces a fresh liveness snapshot of the ranked PayanAgent catalog. `base-market-pulse` combines fresh public ETH, DEX, and Base-network signals. The source code is public, but the paid value is operated aggregation, source health, bounded probing, and timestamped results that a buyer does not have to run.
 
+`agent-work-brief` is the decision-oriented bundle: it combines canonical escrowed work with catalog liveness, excludes ordinary unfunded listings, and classifies opportunities that require capital before an agent spends time evaluating them.
+
+## Why pay when the source is public?
+
+Self-hosting is deliberately allowed. The paid convenience is the maintained run: polling changing upstreams, normalizing responses, detecting partial outages, enforcing bounded work, and serving a timestamped result from a ready endpoint. A buyer can fork the code, but then owns deployment, monitoring, rate-limit handling, schema drift, and repairs. There is no claim of exclusivity; the service must earn trust through freshness and reliable operation.
+
 ## Local development
 
 ```bash
@@ -40,7 +46,13 @@ The response includes source health, deadlines, claim bonds, external-spend requ
 
 ## Base market pulse
 
-`POST /v1/base-market-pulse` costs `$0.01` through x402 and accepts `{}`. It reads Coinbase's public ETH/USD spot endpoint, DEX Screener's public Base WETH/USDC pair feed, and public Base JSON-RPC methods for the current block and gas price. It returns per-source health, timestamped values, and partial results when one source is unavailable. It is informational data only and does not trade or submit transactions.
+`POST /v1/base-market-pulse` costs `$0.01` through x402 and accepts `{}`. The equivalent `GET` route exists for agent directories and simple HTTP clients. It reads Coinbase's public ETH/USD spot endpoint, DEX Screener's public Base WETH/USDC pair feed, and public Base JSON-RPC methods for the current block and gas price. It returns per-source health, timestamped values, and partial results when one source is unavailable. It is informational data only and does not trade or submit transactions.
+
+`POST /v1/agent-work-brief` costs `$0.03` and accepts optional `min_reward_usd`, `limit`, and `health_limit` filters. It is intended for agents deciding whether current work is worth pursuing; it makes no claims, payments, or downstream paid calls.
+
+`GET /.well-known/x402` (also available as `/.well-known/x402.json`) publishes the machine-readable service manifest, routes, prices, network, asset, and payout address. The manifest is generated from the request host so it remains correct when the zero-cost development tunnel rotates.
+
+When the optional agent-tools hub gateway is enabled, it forwards settled requests to `/hub/v1/base-market-pulse` with a hub-issued `X-Hub-Secret`. That upstream path returns 404 without the secret and is separate from the direct x402 routes.
 
 ## MCP integration
 
@@ -52,9 +64,12 @@ npm run start:mcp
 
 The `preflight_context` tool provides a free local tier up to 12,000 characters. Larger inputs return the paid HTTP endpoint and its x402 price. Set `PAID_ENDPOINT` to the currently deployed endpoint when launching the MCP server. See [`llms-install.md`](./llms-install.md) for a copy-paste client configuration.
 
+The same server is available as a hosted, stateless Streamable HTTP MCP endpoint at `https://agent-context-api-proxy.agent-context-proxy.workers.dev/mcp` and is described by [`server.json`](./server.json). This hosted route is intended for clients that can discover remote MCP servers; local execution remains available for self-hosting and offline preflight work.
+
 ## Design notes
 
 - `server.js` contains the Express app, x402 payment middleware, discovery metadata, and route wiring.
+- `mcp-core.js` defines the shared MCP tool surface; `mcp-server.js` runs it over stdio and `/mcp` runs it over Streamable HTTP.
 - `analysis.js` contains deterministic context analysis; `bounty-radar.js` contains source normalization and evidence policy.
 - `payanagent-health.js` contains the bounded, read-only catalog collector and probe logic.
 - `market-pulse.js` contains the bounded public market/RPC collectors and partial-source health output.

@@ -3,39 +3,32 @@ import { paymentMiddleware } from "@x402/express";
 import { HTTPFacilitatorClient, x402ResourceServer } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { declareDiscoveryExtension, bazaarResourceServerExtension } from "@x402/extensions/bazaar";
-import { countTokens, redactSecrets, budgetForModel } from "./analysis.js";
+import { analyzeContext, MAX_INPUT_CHARS } from "./analysis.js";
 import { fetchRadar } from "./bounty-radar.js";
 import { generateHealthReport } from "./payanagent-health.js";
 import { generateMarketPulse } from "./market-pulse.js";
+import { generateWorkBrief } from "./work-brief.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createMcpServer } from "./mcp-core.js";
 
-export const MAX_INPUT_CHARS = 200_000;
 export const PRICE = "$0.005";
 export const RADAR_PRICE = "$0.01";
 export const HEALTH_PRICE = "$0.01";
 export const MARKET_PULSE_PRICE = "$0.01";
+export const WORK_BRIEF_PRICE = "$0.03";
 export const PAY_TO = process.env.PAY_TO || "0xc4e8021CdFf1a11946Ed16bd264f77D6B3C0C0e9";
+const HUB_PROXY_SECRET = process.env.HUB_PROXY_SECRET || "";
 
-export function analyzeContext({ text, model = null, tokenBudget = null, redact = true }) {
-  if (typeof text !== "string") throw new Error("text must be a string");
-  if (text.length > MAX_INPUT_CHARS) throw new Error(`text exceeds ${MAX_INPUT_CHARS} characters`);
-  const result = redact ? redactSecrets(text) : { content: text, count: 0 };
-  const tokens = countTokens(result.content);
-  const modelBudget = model ? budgetForModel(model) : null;
-  const effectiveBudget = Number.isInteger(tokenBudget) && tokenBudget > 0 ? tokenBudget : modelBudget;
-  return {
-    tokens,
-    redacted_count: result.count,
-    redacted_text: result.content,
-    model,
-    model_budget: modelBudget,
-    requested_budget: tokenBudget,
-    effective_budget: effectiveBudget,
-    fits_budget: effectiveBudget === null ? null : tokens <= effectiveBudget,
-    recommendation:
-      effectiveBudget !== null && tokens > effectiveBudget
-        ? "Reduce the context or raise the model budget before sending it."
-        : "Context is within the requested budget.",
-  };
+const SERVICE_DESCRIPTION = "Operated, fresh agent-market and Base market data with explicit source health and timestamps. Buyers pay for the maintained run, not private source code.";
+
+export { analyzeContext, MAX_INPUT_CHARS } from "./analysis.js";
+
+async function sendMarketPulse(_req, res) {
+  try {
+    res.json(await generateMarketPulse());
+  } catch (error) {
+    res.status(502).json({ error: `market data unavailable: ${error.message}` });
+  }
 }
 
 export function createApp({ beforeMiddleware = null } = {}) {
@@ -45,15 +38,78 @@ export function createApp({ beforeMiddleware = null } = {}) {
   // Preserve the public https:// resource URL in x402 payment requirements.
   app.set("trust proxy", true);
   app.use(express.json({ limit: "1mb" }));
+  // A stable Cloudflare Worker proxy forwards this deployment-only marker so
+  // x402 requirements name the stable public resource rather than the
+  // disposable origin tunnel. Ignore it unless the exact configured host
+  // matches; direct tunnel requests keep their normal Host header.
+  const publicHost = process.env.PUBLIC_HOST || "";
+  app.use((req, _res, next) => {
+    if (publicHost && req.get("x-agent-public-host") === publicHost) {
+      req.headers.host = publicHost;
+      req.headers["x-forwarded-proto"] = "https";
+    }
+    next();
+  });
+  // agent-tools hub forwards paid requests here after settlement. Keep this
+  // route outside x402 middleware and require the hub-issued secret so the
+  // upstream cannot be freeloaded through the durable gateway.
+  app.use("/hub", (req, res) => {
+    if (!HUB_PROXY_SECRET || req.get("x-hub-secret") !== HUB_PROXY_SECRET) {
+      return res.status(404).json({ error: "not found" });
+    }
+    if ((req.method === "GET" || req.method === "POST") && req.path === "/v1/base-market-pulse") {
+      return sendMarketPulse(req, res);
+    }
+    return res.status(404).json({ error: "not found" });
+  });
   if (beforeMiddleware) app.use(beforeMiddleware);
 
   app.get("/health", (_req, res) => res.json({ ok: true, service: "agent-context-api", version: "0.4.0" }));
+  app.post("/mcp", async (req, res) => {
+    const server = createMcpServer();
+    try {
+      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+      res.on("close", () => { transport.close(); server.close(); });
+    } catch (error) {
+      if (!res.headersSent) res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null });
+      console.error(`MCP request failed: ${error.message}`);
+    }
+  });
+  app.get("/mcp", (_req, res) => res.status(405).json({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed." }, id: null }));
+  app.delete("/mcp", (_req, res) => res.status(405).json({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed." }, id: null }));
   app.get("/", (_req, res) => res.json({
     service: "LLM Context Preflight",
-    description: "Deterministic context analysis plus operated, fresh agent-market data.",
-    endpoints: ["POST /v1/context-preflight", "POST /v1/bounty-radar", "POST /v1/payanagent-health", "POST /v1/base-market-pulse"],
-    prices: { "POST /v1/context-preflight": PRICE, "POST /v1/bounty-radar": RADAR_PRICE, "POST /v1/payanagent-health": HEALTH_PRICE, "POST /v1/base-market-pulse": MARKET_PULSE_PRICE },
+    description: SERVICE_DESCRIPTION,
+    managed_value: [
+      "fresh execution against changing upstream sources",
+      "normalization, source-health checks, and timestamps",
+      "bounded latency and a maintained public endpoint",
+    ],
+    self_hosting_note: "The implementation is public; self-hosting is an option. The paid convenience is consuming an operated result without deploying, monitoring, or repairing the upstream integrations.",
+    endpoints: ["POST /v1/context-preflight", "POST /v1/bounty-radar", "POST /v1/payanagent-health", "GET /v1/base-market-pulse", "POST /v1/base-market-pulse", "POST /v1/agent-work-brief"],
+    prices: { "POST /v1/context-preflight": PRICE, "POST /v1/bounty-radar": RADAR_PRICE, "POST /v1/payanagent-health": HEALTH_PRICE, "GET /v1/base-market-pulse": MARKET_PULSE_PRICE, "POST /v1/base-market-pulse": MARKET_PULSE_PRICE, "POST /v1/agent-work-brief": WORK_BRIEF_PRICE },
   }));
+
+  app.get(["/.well-known/x402", "/.well-known/x402.json"], (req, res) => {
+    const origin = `${req.protocol}://${req.get("host")}`;
+    res.json({
+      version: 1,
+      service: "agent-context-api",
+      description: SERVICE_DESCRIPTION,
+      payment: { protocol: "x402", network: "eip155:8453", asset: "USDC", payTo: PAY_TO },
+      resources: [
+        { url: `${origin}/v1/context-preflight`, method: "POST", price_usdc: 0.005 },
+        { url: `${origin}/v1/bounty-radar`, method: "POST", price_usdc: 0.01 },
+        { url: `${origin}/v1/payanagent-health`, method: "POST", price_usdc: 0.01 },
+        { url: `${origin}/v1/base-market-pulse`, method: "GET", price_usdc: 0.01 },
+        { url: `${origin}/v1/base-market-pulse`, method: "POST", price_usdc: 0.01 },
+        { url: `${origin}/v1/agent-work-brief`, method: "POST", price_usdc: 0.03 },
+      ],
+      instructions: "Send the listed HTTP method without payment to receive the x402 payment requirements, then retry with a valid payment header.",
+    });
+  });
 
   app.post("/v1/context-preflight", (req, res) => {
     try {
@@ -91,13 +147,27 @@ export function createApp({ beforeMiddleware = null } = {}) {
     }
   });
 
-  app.post("/v1/base-market-pulse", async (_req, res) => {
+  app.post("/v1/agent-work-brief", async (req, res) => {
     try {
-      res.json(await generateMarketPulse());
+      const body = req.body || {};
+      const minRewardUsd = Number(body.min_reward_usd || 0);
+      if (!Number.isFinite(minRewardUsd) || minRewardUsd < 0) {
+        return res.status(400).json({ error: "min_reward_usd must be a non-negative number" });
+      }
+      res.json(await generateWorkBrief({
+        fetchRadar,
+        generateHealthReport,
+        minRewardUsd,
+        limit: body.limit,
+        healthLimit: body.health_limit,
+      }));
     } catch (error) {
-      res.status(502).json({ error: `market data unavailable: ${error.message}` });
+      res.status(502).json({ error: `agent work brief unavailable: ${error.message}` });
     }
   });
+
+  app.get("/v1/base-market-pulse", sendMarketPulse);
+  app.post("/v1/base-market-pulse", sendMarketPulse);
   return app;
 }
 
@@ -142,6 +212,14 @@ export function createPaidApp() {
     type: "object",
     properties: {},
     additionalProperties: false,
+  };
+  const workBriefInputSchema = {
+    type: "object",
+    properties: {
+      min_reward_usd: { type: "number", minimum: 0, default: 0, description: "Minimum gross reward for canonical escrowed work." },
+      limit: { type: "integer", minimum: 1, maximum: 100, default: 20, description: "Maximum opportunities to return." },
+      health_limit: { type: "integer", minimum: 1, maximum: 25, default: 10, description: "Number of catalog offers to probe read-only." },
+    },
   };
   const routes = {
     "POST /v1/context-preflight": {
@@ -188,6 +266,32 @@ export function createPaidApp() {
           inputSchema: marketPulseInputSchema,
           bodyType: "json",
           output: { example: { generated_at: "2026-08-09T00:00:00.000Z", product: "Base ETH and DEX market pulse", summary: { sources_ok: 3, sources_total: 3, eth_usd: 2500, base_block_number: 123, base_gas_price_gwei: 0.01 } } },
+        }),
+      },
+    },
+    "GET /v1/base-market-pulse": {
+      accepts: { scheme: "exact", price: MARKET_PULSE_PRICE, network: "eip155:8453", payTo: PAY_TO, maxTimeoutSeconds: 60 },
+      description: "Return a fresh informational Base ETH and DEX market snapshot from public Coinbase, DEX Screener, and Base RPC sources. No trade or transaction is executed.",
+      mimeType: "application/json",
+      extensions: {
+        ...declareDiscoveryExtension({
+          method: "GET",
+          input: {},
+          inputSchema: marketPulseInputSchema,
+          output: { example: { generated_at: "2026-08-09T00:00:00.000Z", product: "Base ETH and DEX market pulse", summary: { sources_ok: 3, sources_total: 3, eth_usd: 2500, base_block_number: 123, base_gas_price_gwei: 0.01 } } },
+        }),
+      },
+    },
+    "POST /v1/agent-work-brief": {
+      accepts: { scheme: "exact", price: WORK_BRIEF_PRICE, network: "eip155:8453", payTo: PAY_TO, maxTimeoutSeconds: 60 },
+      description: "Combine fresh canonical escrowed agent work with bounded catalog liveness into a decision-ready brief. Excludes unfunded listings and classifies capital requirements.",
+      mimeType: "application/json",
+      extensions: {
+        ...declareDiscoveryExtension({
+          input: { min_reward_usd: 0, limit: 20, health_limit: 10 },
+          inputSchema: workBriefInputSchema,
+          bodyType: "json",
+          output: { example: { generated_at: "2026-08-11T00:00:00.000Z", summary: { opportunities: 1, ready_to_evaluate: 1, capital_required: 0, catalog_alive: 3 }, opportunities: [] } },
         }),
       },
     },

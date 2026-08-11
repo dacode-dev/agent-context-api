@@ -27,6 +27,26 @@ test("health endpoint is free and reports service identity", async () => {
   server.close();
 });
 
+test("x402 manifest publishes host-relative resources and payment metadata", async () => {
+  const server = createApp().listen(0);
+  const { port } = server.address();
+  const response = await fetch(`http://127.0.0.1:${port}/.well-known/x402`);
+  assert.equal(response.status, 200);
+  const manifest = await response.json();
+  assert.equal(manifest.payment.network, "eip155:8453");
+  assert.equal(manifest.payment.asset, "USDC");
+  assert.ok(manifest.resources.some((resource) => resource.url === `http://127.0.0.1:${port}/v1/base-market-pulse` && resource.method === "GET"));
+  server.close();
+});
+
+test("hub upstream is closed when no hub secret is configured", async () => {
+  const server = createApp().listen(0);
+  const { port } = server.address();
+  const response = await fetch(`http://127.0.0.1:${port}/hub/v1/base-market-pulse`);
+  assert.equal(response.status, 404);
+  server.close();
+});
+
 test("bounty radar labels only canonical escrow as funded", () => {
   const canonical = normalizeCanonical({
     opportunity_id: "canonical:test",

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.dacode-dev/agent-context-api",
+  "description": "Free MCP context preflight with local redaction and a paid HTTP upgrade.",
+  "repository": {
+    "url": "https://github.com/dacode-dev/agent-context-api",
+    "source": "github"
+  },
+  "version": "0.4.0",
+  "websiteUrl": "https://dacode-dev.github.io/agent-context-api.html",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://agent-context-api-proxy.agent-context-proxy.workers.dev/mcp"
+    }
+  ]
+}

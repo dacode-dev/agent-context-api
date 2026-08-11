@@ -54,3 +54,28 @@ export function budgetForModel(name) {
   }
   return null;
 }
+
+export const MAX_INPUT_CHARS = 200_000;
+
+export function analyzeContext({ text, model = null, tokenBudget = null, redact = true }) {
+  if (typeof text !== "string") throw new Error("text must be a string");
+  if (text.length > MAX_INPUT_CHARS) throw new Error(`text exceeds ${MAX_INPUT_CHARS} characters`);
+  const result = redact ? redactSecrets(text) : { content: text, count: 0 };
+  const tokens = countTokens(result.content);
+  const modelBudget = model ? budgetForModel(model) : null;
+  const effectiveBudget = Number.isInteger(tokenBudget) && tokenBudget > 0 ? tokenBudget : modelBudget;
+  return {
+    tokens,
+    redacted_count: result.count,
+    redacted_text: result.content,
+    model,
+    model_budget: modelBudget,
+    requested_budget: tokenBudget,
+    effective_budget: effectiveBudget,
+    fits_budget: effectiveBudget === null ? null : tokens <= effectiveBudget,
+    recommendation:
+      effectiveBudget !== null && tokens > effectiveBudget
+        ? "Reduce the context or raise the model budget before sending it."
+        : "Context is within the requested budget.",
+  };
+}
