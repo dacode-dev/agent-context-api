@@ -42,10 +42,16 @@ export function createApp({ beforeMiddleware = null } = {}) {
   // x402 requirements name the stable public resource rather than the
   // disposable origin tunnel. Ignore it unless the exact configured host
   // matches; direct tunnel requests keep their normal Host header.
-  const publicHost = process.env.PUBLIC_HOST || "";
+  const publicHosts = new Set(
+    (process.env.PUBLIC_HOSTS || process.env.PUBLIC_HOST || "")
+      .split(",")
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean)
+  );
   app.use((req, _res, next) => {
-    if (publicHost && req.get("x-agent-public-host") === publicHost) {
-      req.headers.host = publicHost;
+    const forwardedHost = (req.get("x-agent-public-host") || "").trim().toLowerCase();
+    if (publicHosts.has(forwardedHost)) {
+      req.headers.host = forwardedHost;
       req.headers["x-forwarded-proto"] = "https";
     }
     next();

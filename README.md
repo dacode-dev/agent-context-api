@@ -30,7 +30,7 @@ curl -X POST http://localhost:8787/v1/context-preflight \
   -d '{"text":"const token = \"sk-example\";","model":"claude-sonnet","token_budget":1000}'
 ```
 
-The default price is `$0.005` per request. Set `PAY_TO` to change the public payout address and `X402_FACILITATOR` to select a compatible facilitator. Do not put private keys or facilitator credentials in this repository; the service does not need a signing key to receive payments.
+The default price is `$0.005` per request. Set `PAY_TO` to change the public payout address, `X402_FACILITATOR` to select a compatible facilitator, and `PUBLIC_HOSTS` to provide a comma-separated allowlist of Worker/custom hostnames used in x402 resource URLs. Do not put private keys or facilitator credentials in this repository; the service does not need a signing key to receive payments.
 
 ## Managed bounty radar
 
