@@ -40,7 +40,9 @@ export function decodeChallenge(b64) {
           scheme: a.scheme,
           network: a.network,
           payTo: a.payTo || a.payToAddress,
-          price: a.maxAmountRequired || a.maxRequiredPrice || a.price,
+          // v2 uses "amount"; some v1-era implementations used
+          // "maxAmountRequired"/"maxRequiredPrice". Accept all shapes.
+          price: a.amount || a.maxAmountRequired || a.maxRequiredPrice || a.price,
           asset: a.asset || (a.extra && a.extra.name),
         }))
       : [];
