@@ -23,7 +23,8 @@ test("health endpoint is free and reports service identity", async () => {
   const { port } = server.address();
   const response = await fetch(`http://127.0.0.1:${port}/health`);
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { ok: true, service: "agent-context-api", version: "0.4.0" });
+  const pkgVersion = JSON.parse(await import("node:fs").then((fs) => fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"))).version;
+  assert.deepEqual(await response.json(), { ok: true, service: "agent-context-api", version: pkgVersion });
   server.close();
 });
 
