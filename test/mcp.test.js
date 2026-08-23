@@ -12,7 +12,10 @@ test("MCP server exposes local preflight and paid upgrade boundary", async () =>
   await client.connect(clientTransport);
 
   const tools = await client.listTools();
-  assert.deepEqual(tools.tools.map((tool) => tool.name), ["preflight_context"]);
+  assert.deepEqual(
+    [...tools.tools.map((tool) => tool.name)].sort(),
+    ["preflight_context", "read_page_preview"]
+  );
 
   const free = await client.callTool({ name: "preflight_context", arguments: { text: "const key = 'sk-test-123456';" } });
   assert.equal(free.isError, undefined);
