@@ -1,6 +1,6 @@
 {
   "name": "agent-context-api",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A deterministic x402 API for LLM context budgets and secret redaction.",
   "repository": {
     "type": "git",

@@ -4,6 +4,7 @@ import { HTTPFacilitatorClient, x402ResourceServer } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { declareDiscoveryExtension, bazaarResourceServerExtension } from "@x402/extensions/bazaar";
 import { readPage } from "./page-read.js";
+import { verifyEndpoint } from "./x402-verify.js";
 import { analyzeContext, MAX_INPUT_CHARS } from "./analysis.js";
 import { fetchRadar } from "./bounty-radar.js";
 import { generateHealthReport } from "./payanagent-health.js";
@@ -22,6 +23,7 @@ export const HEALTH_PRICE = "$0.01";
 export const MARKET_PULSE_PRICE = "$0.01";
 export const WORK_BRIEF_PRICE = "$0.03";
 export const READ_PAGE_PRICE = "$0.01";
+export const VERIFY_PRICE = "$0.005";
 export const PAY_TO = process.env.PAY_TO || "0xc4e8021CdFf1a11946Ed16bd264f77D6B3C0C0e9";
 const HUB_PROXY_SECRET = process.env.HUB_PROXY_SECRET || "";
 
@@ -100,8 +102,8 @@ export function createApp({ beforeMiddleware = null } = {}) {
       "bounded latency and a maintained public endpoint",
     ],
     self_hosting_note: "The implementation is public; self-hosting is an option. The paid convenience is consuming an operated result without deploying, monitoring, or repairing the upstream integrations.",
-    endpoints: ["POST /mcp", "POST /v1/context-preflight", "POST /v1/bounty-radar", "POST /v1/payanagent-health", "GET /v1/base-market-pulse", "POST /v1/base-market-pulse", "POST /v1/agent-work-brief", "POST /v1/read-page"],
-    prices: { "POST /v1/context-preflight": PRICE, "POST /v1/bounty-radar": RADAR_PRICE, "POST /v1/payanagent-health": HEALTH_PRICE, "GET /v1/base-market-pulse": MARKET_PULSE_PRICE, "POST /v1/base-market-pulse": MARKET_PULSE_PRICE, "POST /v1/agent-work-brief": WORK_BRIEF_PRICE, "POST /v1/read-page": READ_PAGE_PRICE },
+    endpoints: ["POST /mcp", "POST /v1/context-preflight", "POST /v1/bounty-radar", "POST /v1/payanagent-health", "GET /v1/base-market-pulse", "POST /v1/base-market-pulse", "POST /v1/agent-work-brief", "POST /v1/read-page", "POST /v1/x402-verify"],
+    prices: { "POST /v1/context-preflight": PRICE, "POST /v1/bounty-radar": RADAR_PRICE, "POST /v1/payanagent-health": HEALTH_PRICE, "GET /v1/base-market-pulse": MARKET_PULSE_PRICE, "POST /v1/base-market-pulse": MARKET_PULSE_PRICE, "POST /v1/agent-work-brief": WORK_BRIEF_PRICE, "POST /v1/read-page": READ_PAGE_PRICE, "POST /v1/x402-verify": VERIFY_PRICE },
   }));
 
   app.get(["/.well-known/x402", "/.well-known/x402.json"], (req, res) => {
@@ -119,6 +121,7 @@ export function createApp({ beforeMiddleware = null } = {}) {
         { url: `${origin}/v1/base-market-pulse`, method: "POST", price_usdc: 0.01 },
         { url: `${origin}/v1/agent-work-brief`, method: "POST", price_usdc: 0.03 },
         { url: `${origin}/v1/read-page`, method: "POST", price_usdc: 0.01 },
+        { url: `${origin}/v1/x402-verify`, method: "POST", price_usdc: 0.005 },
       ],
       instructions: "Send the listed HTTP method without payment to receive the x402 payment requirements, then retry with a valid payment header.",
     });
@@ -193,6 +196,21 @@ export function createApp({ beforeMiddleware = null } = {}) {
     }
   });
 
+  app.post("/v1/x402-verify", async (req, res) => {
+    try {
+      const body = req.body || {};
+      if (!body.url) return res.status(400).json({ ok: false, error: "url is required" });
+      const result = await verifyEndpoint(body.url, { method: body.method, body: body.body, timeoutMs: body.timeout_ms });
+      if (!result.ok) {
+        const status = result.code === "bad_url" ? 400 : 502;
+        return res.status(status).json(result);
+      }
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ ok: false, error: `x402-verify failed: ${error.message}` });
+    }
+  });
+
   app.get("/v1/base-market-pulse", sendMarketPulse);
   app.post("/v1/base-market-pulse", sendMarketPulse);
   return app;
@@ -255,6 +273,16 @@ export function createPaidApp() {
       url: { type: "string", description: "Public http(s) URL of the page to read. Local/private network addresses are rejected." },
       max_bytes: { type: "integer", minimum: 1000, maximum: 1000000, default: 400000, description: "Maximum bytes to read from the response body before conversion." },
       timeout_ms: { type: "integer", minimum: 500, maximum: 20000, default: 12000, description: "Fetch timeout in milliseconds." },
+    },
+  };
+  const verifyInputSchema = {
+    type: "object",
+    required: ["url"],
+    properties: {
+      url: { type: "string", description: "Absolute http(s) URL of the x402 endpoint to probe." },
+      method: { type: "string", enum: ["GET", "POST"], default: "GET", description: "HTTP method used for the unpaid probe." },
+      body: { type: "string", description: "Optional JSON string sent with a POST probe." },
+      timeout_ms: { type: "integer", minimum: 500, maximum: 15000, default: 10000, description: "Probe timeout in milliseconds." },
     },
   };
   const routes = {
@@ -342,6 +370,20 @@ export function createPaidApp() {
           inputSchema: readPageInputSchema,
           bodyType: "json",
           output: { example: { ok: true, requested_url: "https://example.com", final_url: "https://example.com/", status: 200, content_type: "text/html", kind: "markdown", markdown: "# Example Domain\n\nThis domain is for use in illustrative examples...", bytes_fetched: 1256, total_bytes: 1256, truncated: false } },
+        }),
+      },
+    },
+    "POST /v1/x402-verify": {
+      accepts: { scheme: "exact", price: VERIFY_PRICE, network: "eip155:8453", payTo: PAY_TO, maxTimeoutSeconds: 30 },
+      description: "Probe any x402 endpoint from the buyer side and learn whether it is actually sellable: sends the unpaid request, decodes the 402 challenge (payTo, price, scheme, x402 version), and returns a verdict (sellable / no_gate / plain_402 / error). Never pays.",
+      mimeType: "application/json",
+      extensions: {
+        ...declareDiscoveryExtension({
+          method: "POST",
+          input: { url: "https://some-x402-seller.example/v1/thing", method: "GET" },
+          inputSchema: verifyInputSchema,
+          bodyType: "json",
+          output: { example: { ok: true, url: "https://some-x402-seller.example/v1/thing", probed_method: "GET", status: 402, verdict: "sellable", challenge_header: "x-payment-required", challenge: { x402Version: 2, accepts: [{ scheme: "exact", network: "eip155:8453", payTo: "0xabc...", price: "10000" }] } } },
         }),
       },
     },
