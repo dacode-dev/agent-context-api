@@ -1,13 +1,21 @@
 {
   "name": "agent-context-api",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A deterministic x402 API for LLM context budgets and secret redaction.",
   "repository": {
     "type": "git",
     "url": "https://github.com/dacode-dev/agent-context-api.git"
   },
   "homepage": "https://github.com/dacode-dev/agent-context-api",
-  "keywords": ["mcp", "llm", "context", "tokens", "secret-redaction", "x402", "agents"],
+  "keywords": [
+    "mcp",
+    "llm",
+    "context",
+    "tokens",
+    "secret-redaction",
+    "x402",
+    "agents"
+  ],
   "type": "module",
   "bin": {
     "agent-context-mcp": "mcp-server.js"
@@ -17,7 +25,19 @@
     "start:mcp": "node mcp-server.js",
     "test": "node --test"
   },
-  "files": ["LICENSE", "README.md", "analysis.js", "bounty-radar.js", "llms-install.md", "market-pulse.js", "mcp-core.js", "mcp-server.js", "payanagent-health.js", "server.js", "server.json"],
+  "files": [
+    "LICENSE",
+    "README.md",
+    "analysis.js",
+    "bounty-radar.js",
+    "llms-install.md",
+    "market-pulse.js",
+    "mcp-core.js",
+    "mcp-server.js",
+    "payanagent-health.js",
+    "server.js",
+    "server.json"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@x402/core": "^2.21.0",

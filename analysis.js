@@ -3,14 +3,27 @@ import { encode } from "gpt-tokenizer";
 const SECRET_PATTERNS = [
   { name: "aws-access-key-id", re: /\bAKIA[0-9A-Z]{16}\b/g },
   { name: "github-token", re: /\bgh[pousr]_[A-Za-z0-9]{36,255}\b/g },
+  { name: "gitlab-pat", re: /\bglpat-[A-Za-z0-9_-]{20,}\b/g },
   { name: "slack-token", re: /\bxox[baprs]-[0-9A-Za-z-]{10,72}\b/g },
   { name: "google-api-key", re: /\bAIza[0-9A-Za-z_-]{35}\b/g },
   { name: "stripe-key", re: /\b(?:sk|pk|rk)_live_[0-9a-zA-Z]{24,}\b/g },
-  { name: "openai-key", re: /\bsk-(?!ant-)[A-Za-z0-9]{20,}\b/g },
+  { name: "openai-key", re: /\bsk-(?!ant-)(?:proj-)?[A-Za-z0-9_-]{20,}\b/g },
   { name: "anthropic-key", re: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g },
   { name: "private-key-block", re: /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g },
   { name: "jwt", re: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
+  { name: "sendgrid-key", re: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g },
+  { name: "twilio-api-key", re: /\bSK[a-f0-9]{32}\b/g },
+  { name: "npm-token", re: /\bnpm_[A-Za-z0-9]{36}\b/g },
+  { name: "huggingface-token", re: /\bhf_[A-Za-z0-9]{20,}\b/g },
+  { name: "vercel-token", re: /\bvercel_[A-Za-z0-9]{16,}\b/g },
+  { name: "linear-api-key", re: /\blin_api_[A-Za-z0-9_]{20,}\b/g },
 ];
+
+// Database/service connection URLs carrying an embedded password, e.g.
+// postgres://user:secretpw@host:5432/db. The password segment is replaced;
+// scheme, user, host, and path are preserved so the response stays readable.
+const CONN_URL_RE =
+  /\b((?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss|amqps?|mssql):\/\/[^:\/\s"@]+:)([^@"\s]{6,})(@)/g;
 
 const ENV_ASSIGNMENT_RE =
   /^(\s*[\w.]*(?:SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY)[\w.]*\s*[:=]\s*['"]?)([^\s'"]{6,})(['"]?)/gim;
@@ -27,6 +40,11 @@ export function redactSecrets(content) {
   redacted = redacted.replace(ENV_ASSIGNMENT_RE, (_match, prefix, _value, suffix) => {
     count++;
     return `${prefix}[REDACTED]${suffix}`;
+  });
+  // Connection URLs: keep scheme+user, drop the password.
+  redacted = redacted.replace(CONN_URL_RE, (_m, pre, _pw, at) => {
+    count++;
+    return `${pre}[REDACTED]${at}`;
   });
   return { content: redacted, count };
 }
