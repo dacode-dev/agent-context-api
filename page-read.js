@@ -82,6 +82,13 @@ function decodeEntities(s) {
     .replace(/&apos;/g, "'");
 }
 
+// Extracts the document title, tolerating malformed markup.
+export function extractTitle(html) {
+  const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(String(html));
+  if (!m) return undefined;
+  return decodeEntities(stripTags(m[1])).replace(/\s+/g, " ").trim() || undefined;
+}
+
 const MAX_BYTES_DEFAULT = 400_000;
 
 // Fetches a URL and returns either { kind: "markdown", ... } metadata plus the
@@ -117,7 +124,7 @@ export async function readPage(rawUrl, opts = {}) {
       truncated: buf.byteLength > maxBytes,
     };
     if (/text\/html|application\/xhtml/i.test(contentType) || /^\s*</.test(body)) {
-      return { ...base, ok: true, kind: "markdown", markdown: htmlToMarkdown(body, maxBytes) };
+      return { ...base, ok: true, kind: "markdown", title: extractTitle(body), markdown: htmlToMarkdown(body, maxBytes) };
     }
     if (/text\/|application\/(json|xml|javascript)/i.test(contentType)) {
       return { ...base, ok: true, kind: "text", text: body.slice(0, maxBytes) };

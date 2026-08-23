@@ -78,3 +78,23 @@ test("readPage clamps bounds and reports truncation (stubbed fetch)", async () =
     g.fetch = origFetch;
   }
 });
+
+test("extractTitle handles entities, whitespace, and missing titles", async () => {
+  const { extractTitle } = await import("../page-read.js");
+  assert.equal(extractTitle("<html><head><title>  Hello &amp; World </title></head></html>"), "Hello & World");
+  assert.equal(extractTitle("<body>no title here</body>"), undefined);
+  assert.equal(extractTitle("<title></title>"), undefined);
+});
+
+test("readPage includes the page title in markdown responses (stubbed fetch)", async () => {
+  const g = globalThis;
+  const orig = g.fetch;
+  g.fetch = async () => new Response("<html><head><title>Example &amp; Co</title></head><body><p>x</p></body></html>", { status: 200, headers: { "content-type": "text/html" } });
+  try {
+    const r = await readPage("https://example.com/titled");
+    assert.equal(r.ok, true);
+    assert.equal(r.title, "Example & Co");
+  } finally {
+    g.fetch = orig;
+  }
+});
