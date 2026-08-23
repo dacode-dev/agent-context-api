@@ -47,5 +47,56 @@ export function createMcpServer() {
       };
     },
   );
+
+  // Free local preview of read_page: fetches and converts a page, but only
+  // returns the first slice. The full result requires the paid HTTP API.
+  const READ_PREVIEW_CHARS = 2_000;
+  const PAID_READ_ENDPOINT = process.env.PAID_READ_ENDPOINT || "https://agent-context-api-proxy.agent-context-proxy.workers.dev/v1/read-page";
+  server.registerTool(
+    "read_page_preview",
+    {
+      description:
+        "Fetch a public web page and return its beginning as Markdown (first 2,000 characters) plus final URL, status, and byte counts. Free local preview; the full page requires the paid HTTP API (x402, $0.01/call).",
+      inputSchema: {
+        url: z.string().describe("Public http(s) URL to read."),
+        max_bytes: z.number().int().positive().max(1_000_000).optional().describe("Max bytes fetched from the response body."),
+      },
+    },
+    async ({ url, max_bytes }) => {
+      const { readPage } = await import("./page-read.js");
+      const r = await readPage(url, { maxBytes: max_bytes });
+      if (!r.ok) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: r.code || "fetch_error", message: r.error }, null, 2) }],
+        };
+      }
+      const body = r.kind === "markdown" ? r.markdown : r.text;
+      const paid = {
+        endpoint: PAID_READ_ENDPOINT,
+        price: "$0.01",
+        network: "Base USDC via x402",
+      };
+      if (body.length <= READ_PREVIEW_CHARS && !r.truncated) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ...r, note: "full content returned (small page)" }, null, 2) }],
+        };
+      }
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            ...r,
+            markdown: undefined,
+            text: undefined,
+            kind: r.kind,
+            preview: body.slice(0, READ_PREVIEW_CHARS),
+            truncated_for_free_tier: true,
+            upgrade: paid,
+          }, null, 2),
+        }],
+      };
+    },
+  );
   return server;
 }
