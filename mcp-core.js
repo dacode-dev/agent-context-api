@@ -1,12 +1,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { analyzeContext } from "./analysis.js";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const VERSION = process.env.npm_package_version || require("./package.json").version;
 
 export const LOCAL_MAX_INPUT_CHARS = 12_000;
 export const PAID_ENDPOINT = process.env.PAID_ENDPOINT || "https://agent-context-api-proxy.agent-context-proxy.workers.dev/v1/context-preflight";
 
 export function createMcpServer() {
-  const server = new McpServer({ name: "agent-context-api", version: "0.4.0" });
+  const server = new McpServer({ name: "agent-context-api", version: VERSION });
   server.registerTool(
     "preflight_context",
     {

@@ -10,6 +10,10 @@ import { generateMarketPulse } from "./market-pulse.js";
 import { generateWorkBrief } from "./work-brief.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpServer } from "./mcp-core.js";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const VERSION = process.env.npm_package_version || require("./package.json").version;
 
 export const PRICE = "$0.005";
 export const RADAR_PRICE = "$0.01";
@@ -70,7 +74,7 @@ export function createApp({ beforeMiddleware = null } = {}) {
   });
   if (beforeMiddleware) app.use(beforeMiddleware);
 
-  app.get("/health", (_req, res) => res.json({ ok: true, service: "agent-context-api", version: "0.4.0" }));
+  app.get("/health", (_req, res) => res.json({ ok: true, service: "agent-context-api", version: VERSION }));
   app.post("/mcp", async (req, res) => {
     const server = createMcpServer();
     try {
