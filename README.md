@@ -82,3 +82,10 @@ The same server is available as a hosted, stateless Streamable HTTP MCP endpoint
 - `test/server.test.js` covers redaction, budgets, the health route, and funded/unfunded labeling; `test/payanagent-health.test.js` covers health classification and the no-payment probe contract.
 - The API intentionally does not send submitted text to a third party; processing is local.
 - This is an experiment. Revenue must be verified from settlement records, not inferred from 402 responses, requests, or directory listings.
+
+## Related
+
+- [x402 Services Directory](https://dacode-dev.github.io/x402-services-directory/) — live listing of x402-paid APIs with verified payment gates
+- [What is x402?](https://dacode-dev.github.io/what-is-x402.html) — how HTTP 402 micropayments work, from an operator
+- [llm-ctxpack](https://github.com/dacode-dev/llm-ctxpack) — free CLI repo packer for agent context
+- [Token Counter](https://dacode-dev.github.io/token-counter.html) — browser-based token counting
