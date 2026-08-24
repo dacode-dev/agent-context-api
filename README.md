@@ -52,6 +52,10 @@ The response includes source health, deadlines, claim bonds, external-spend requ
 
 `POST /v1/agent-work-brief` costs `$0.03` and accepts optional `min_reward_usd`, `limit`, and `health_limit` filters. It is intended for agents deciding whether current work is worth pursuing; it makes no claims, payments, or downstream paid calls.
 
+`POST /v1/read-page` costs `$0.01` and accepts `{ url, max_bytes?, timeout_ms? }`. It fetches a public http(s) page and returns clean Markdown (or plain text for non-HTML responses) with the document `title`, final URL after redirects, status, content type, byte counts, and a truncation flag. Local/private network targets are rejected (SSRF guard), and fetches are size- and time-bounded.
+
+`POST /v1/x402-verify` costs `$0.005` and accepts `{ url, method?, body?, timeout_ms? }`. It probes any x402 endpoint from the buyer side — sends the unpaid request, decodes the 402 challenge, and returns the payment terms (`payTo`, price, scheme, network, x402 version) plus a verdict: `sellable`, `no_gate`, `plain_402`, `challenge_undecodable`, or `error_response`. It never pays.
+
 `GET /.well-known/x402` (also available as `/.well-known/x402.json`) publishes the machine-readable service manifest, routes, prices, network, asset, and payout address. The manifest is generated from the request host so it remains correct when the zero-cost development tunnel rotates.
 
 When the optional agent-tools hub gateway is enabled, it forwards settled requests to `/hub/v1/base-market-pulse` with a hub-issued `X-Hub-Secret`. That upstream path returns 404 without the secret and is separate from the direct x402 routes.
