@@ -49,3 +49,11 @@ test("redactSecrets leaves normal code untouched", () => {
   assert.equal(content, code);
   assert.equal(count, 0);
 });
+
+test("budgetForModel recognizes gpt-5 and grok windows (parity with llm-ctxpack)", async () => {
+  const { budgetForModel } = await import("../analysis.js");
+  assert.equal(budgetForModel("gpt-5"), Math.floor(400000 * 0.85));
+  assert.equal(budgetForModel("grok-4"), Math.floor(256000 * 0.85));
+  // ordering guard: gpt-5 must not fall through to the generic gpt rule
+  assert.notEqual(budgetForModel("gpt-5"), Math.floor(128000 * 0.85));
+});
