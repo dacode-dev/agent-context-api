@@ -98,5 +98,37 @@ export function createMcpServer() {
       };
     },
   );
+
+  // ipintel MCP tool: free lookups against the operated backend (same free tier
+  // as the branded endpoint). Risk scoring + privacy flags are fully returned.
+  const IPINTEL_BACKEND = process.env.IPINTEL_BACKEND || "http://127.0.0.1:8920";
+  server.registerTool(
+    "ip_intel",
+    {
+      description:
+        "Look up an IPv4/IPv6 address: country, ASN with hosting/ISP classification, VPN/proxy/Tor/datacenter flags from daily-refreshed lists, and an explainable risk score (0-100) naming every contributing signal.",
+      inputSchema: {
+        ip: z.string().describe("IPv4 or IPv6 address to look up."),
+      },
+    },
+    async ({ ip }) => {
+      try {
+        const upstream = await fetch(`${IPINTEL_BACKEND}/v1/lookup?ip=${encodeURIComponent(ip)}`, { signal: AbortSignal.timeout(8000) });
+        const data = await upstream.json();
+        if (!upstream.ok || data.error) {
+          return {
+            isError: true,
+            content: [{ type: "text", text: JSON.stringify({ error: data.error || "backend_error", status: upstream.status }, null, 2) }],
+          };
+        }
+        return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: JSON.stringify({ error: "backend_unavailable", message: error.message }, null, 2) }],
+        };
+      }
+    },
+  );
   return server;
 }

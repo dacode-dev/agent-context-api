@@ -14,7 +14,7 @@ test("mcp server exposes preflight_context and read_page_preview tools", async (
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
   const tools = await client.listTools();
   const names = tools.tools.map((t) => t.name).sort();
-  assert.deepEqual(names, ["preflight_context", "read_page_preview"]);
+  assert.deepEqual(names, ["ip_intel", "preflight_context", "read_page_preview"]);
   await client.close();
   await server.close();
 });
