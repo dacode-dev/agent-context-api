@@ -4,6 +4,7 @@ import { HTTPFacilitatorClient, x402ResourceServer } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { declareDiscoveryExtension, bazaarResourceServerExtension } from "@x402/extensions/bazaar";
 import { readPage } from "./page-read.js";
+const IPINTEL_BACKEND = process.env.IPINTEL_BACKEND || "http://127.0.0.1:8920";
 import { verifyEndpoint } from "./x402-verify.js";
 import { analyzeContext, MAX_INPUT_CHARS } from "./analysis.js";
 import { fetchRadar } from "./bounty-radar.js";
@@ -24,6 +25,7 @@ export const MARKET_PULSE_PRICE = "$0.01";
 export const WORK_BRIEF_PRICE = "$0.03";
 export const READ_PAGE_PRICE = "$0.01";
 export const VERIFY_PRICE = "$0.005";
+export const IPINTEL_PRICE = "$0.01";
 export const PAY_TO = process.env.PAY_TO || "0xc4e8021CdFf1a11946Ed16bd264f77D6B3C0C0e9";
 const HUB_PROXY_SECRET = process.env.HUB_PROXY_SECRET || "";
 
@@ -102,8 +104,8 @@ export function createApp({ beforeMiddleware = null } = {}) {
       "bounded latency and a maintained public endpoint",
     ],
     self_hosting_note: "The implementation is public; self-hosting is an option. The paid convenience is consuming an operated result without deploying, monitoring, or repairing the upstream integrations.",
-    endpoints: ["POST /mcp", "POST /v1/context-preflight", "POST /v1/bounty-radar", "POST /v1/payanagent-health", "GET /v1/base-market-pulse", "POST /v1/base-market-pulse", "POST /v1/agent-work-brief", "POST /v1/read-page", "POST /v1/x402-verify"],
-    prices: { "POST /v1/context-preflight": PRICE, "POST /v1/bounty-radar": RADAR_PRICE, "POST /v1/payanagent-health": HEALTH_PRICE, "GET /v1/base-market-pulse": MARKET_PULSE_PRICE, "POST /v1/base-market-pulse": MARKET_PULSE_PRICE, "POST /v1/agent-work-brief": WORK_BRIEF_PRICE, "POST /v1/read-page": READ_PAGE_PRICE, "POST /v1/x402-verify": VERIFY_PRICE },
+    endpoints: ["POST /mcp", "POST /v1/context-preflight", "POST /v1/bounty-radar", "POST /v1/payanagent-health", "GET /v1/base-market-pulse", "POST /v1/base-market-pulse", "POST /v1/agent-work-brief", "POST /v1/read-page", "POST /v1/x402-verify", "GET /v1/ip-intel"],
+    prices: { "POST /v1/context-preflight": PRICE, "POST /v1/bounty-radar": RADAR_PRICE, "POST /v1/payanagent-health": HEALTH_PRICE, "GET /v1/base-market-pulse": MARKET_PULSE_PRICE, "POST /v1/base-market-pulse": MARKET_PULSE_PRICE, "POST /v1/agent-work-brief": WORK_BRIEF_PRICE, "POST /v1/read-page": READ_PAGE_PRICE, "POST /v1/x402-verify": VERIFY_PRICE, "GET /v1/ip-intel": IPINTEL_PRICE },
   }));
 
   app.get(["/.well-known/x402", "/.well-known/x402.json"], (req, res) => {
@@ -122,6 +124,7 @@ export function createApp({ beforeMiddleware = null } = {}) {
         { url: `${origin}/v1/agent-work-brief`, method: "POST", price_usdc: 0.03 },
         { url: `${origin}/v1/read-page`, method: "POST", price_usdc: 0.01 },
         { url: `${origin}/v1/x402-verify`, method: "POST", price_usdc: 0.005 },
+        { url: `${origin}/v1/ip-intel`, method: "GET", price_usdc: 0.01 },
       ],
       instructions: "Send the listed HTTP method without payment to receive the x402 payment requirements, then retry with a valid payment header.",
     });
@@ -208,6 +211,21 @@ export function createApp({ beforeMiddleware = null } = {}) {
       res.json(result);
     } catch (error) {
       res.status(500).json({ ok: false, error: `x402-verify failed: ${error.message}` });
+    }
+  });
+
+  app.get("/v1/ip-intel", async (req, res) => {
+    try {
+      const ip = req.query.ip;
+      if (!ip) return res.status(400).json({ ok: false, error: "ip is required" });
+      const upstream = await fetch(`${IPINTEL_BACKEND}/v1/lookup?ip=${encodeURIComponent(ip)}`, { signal: AbortSignal.timeout(8000) });
+      const data = await upstream.json();
+      if (!upstream.ok || data.error) {
+        return res.status(upstream.status === 400 ? 400 : 502).json({ ok: false, error: data.error || "backend_error" });
+      }
+      res.json({ ok: true, ...data });
+    } catch (error) {
+      res.status(502).json({ ok: false, error: `ip-intel backend unavailable: ${error.message}` });
     }
   });
 
@@ -384,6 +402,18 @@ export function createPaidApp() {
           inputSchema: verifyInputSchema,
           bodyType: "json",
           output: { example: { ok: true, url: "https://some-x402-seller.example/v1/thing", probed_method: "GET", status: 402, verdict: "sellable", challenge_header: "x-payment-required", challenge: { x402Version: 2, accepts: [{ scheme: "exact", network: "eip155:8453", payTo: "0xabc...", price: "10000" }] } } },
+        }),
+      },
+    },
+    "GET /v1/ip-intel": {
+      accepts: { scheme: "exact", price: IPINTEL_PRICE, network: "eip155:8453", payTo: PAY_TO, maxTimeoutSeconds: 30 },
+      description: "IP intelligence lookup: country, ASN with hosting/ISP classification, VPN/proxy/Tor/datacenter flags from daily-refreshed lists, and a severity-weighted explainable risk score (0-100) naming every contributing signal.",
+      mimeType: "application/json",
+      extensions: {
+        ...declareDiscoveryExtension({
+          method: "GET",
+          input: { ip: "8.8.8.8" },
+          output: { example: { ok: true, ip: "8.8.8.8", country: { code: "US", name: "United States", confidence: null }, asn: { number: 15169, org: "GOOGLE", type: "hosting" }, privacy: { flagged: true, signals: [{ kind: "hosting", list: "datacenter-nets" }] }, risk: { score: 16, band: "low", signals: ["datacenter-nets"] }, continent: "North America" } },
         }),
       },
     },
