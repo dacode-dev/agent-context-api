@@ -125,6 +125,7 @@ export function createApp({ beforeMiddleware = null } = {}) {
         { url: `${origin}/v1/read-page`, method: "POST", price_usdc: 0.01 },
         { url: `${origin}/v1/x402-verify`, method: "POST", price_usdc: 0.005 },
         { url: `${origin}/v1/ip-intel`, method: "GET", price_usdc: 0.01 },
+        { url: `${origin}/v1/ip-intel`, method: "POST", price_usdc: 0.01 },
       ],
       instructions: "Send the listed HTTP method without payment to receive the x402 payment requirements, then retry with a valid payment header.",
     });
@@ -214,9 +215,9 @@ export function createApp({ beforeMiddleware = null } = {}) {
     }
   });
 
-  app.get("/v1/ip-intel", async (req, res) => {
+  const ipIntelHandler = async (req, res) => {
     try {
-      const ip = req.query.ip;
+      const ip = (req.method === "POST" ? req.body?.ip : req.query.ip) || req.query.ip;
       if (!ip) return res.status(400).json({ ok: false, error: "ip is required" });
       const upstream = await fetch(`${IPINTEL_BACKEND}/v1/lookup?ip=${encodeURIComponent(ip)}`, { signal: AbortSignal.timeout(8000) });
       const data = await upstream.json();
@@ -227,7 +228,9 @@ export function createApp({ beforeMiddleware = null } = {}) {
     } catch (error) {
       res.status(502).json({ ok: false, error: `ip-intel backend unavailable: ${error.message}` });
     }
-  });
+  };
+  app.get("/v1/ip-intel", ipIntelHandler);
+  app.post("/v1/ip-intel", ipIntelHandler);
 
   app.get("/v1/base-market-pulse", sendMarketPulse);
   app.post("/v1/base-market-pulse", sendMarketPulse);
@@ -402,6 +405,19 @@ export function createPaidApp() {
           inputSchema: verifyInputSchema,
           bodyType: "json",
           output: { example: { ok: true, url: "https://some-x402-seller.example/v1/thing", probed_method: "GET", status: 402, verdict: "sellable", challenge_header: "x-payment-required", challenge: { x402Version: 2, accepts: [{ scheme: "exact", network: "eip155:8453", payTo: "0xabc...", price: "10000" }] } } },
+        }),
+      },
+    },
+    "POST /v1/ip-intel": {
+      accepts: { scheme: "exact", price: IPINTEL_PRICE, network: "eip155:8453", payTo: PAY_TO, maxTimeoutSeconds: 30 },
+      description: "IP intelligence lookup (POST with JSON body {ip}): country, ASN with hosting/ISP classification, VPN/proxy/Tor/datacenter flags from daily-refreshed lists, and a severity-weighted explainable risk score (0-100).",
+      mimeType: "application/json",
+      extensions: {
+        ...declareDiscoveryExtension({
+          method: "POST",
+          input: { ip: "8.8.8.8" },
+          bodyType: "json",
+          output: { example: { ok: true, ip: "8.8.8.8" } },
         }),
       },
     },
