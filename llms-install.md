@@ -54,3 +54,7 @@ Larger context and full page reads go through the HTTP API — send the request 
 | `POST /v1/agent-work-brief` | Decision-ready work brief | $0.03 |
 
 Discovery: `GET /.well-known/x402.json` lists every route with prices; the Bazaar extension is declared on each 402 response.
+
+## Also from this team
+
+- [x402 Services Directory](https://dacode-dev.github.io/x402-services-directory/) — live listing of every x402-paid API across public facilitators, with prices and verified payment gates. Machine-readable: `services.json`.
